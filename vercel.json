@@ -1,26 +1,26 @@
 {
-    "builds": [
-      {
-        "src": "app.py",
-        "use": "@vercel/python"
-      },
-      {
-        "src": "index.html",
-        "use": "@vercel/static-build"
-      }
-    ],
-    "routes": [
-      {
-        "src": "/(.*)",
-        "dest": "index.html"
-      },
-      {
-        "src": "/analyze",
-        "dest": "app.py"
-      },
-      {
-        "src": "/download/(.*)",
-        "dest": "app.py"
-      }
-    ]
-  }
+  "builds": [
+    {
+      "src": "app.py",
+      "use": "@vercel/python"
+    },
+    {
+      "src": "index.html",
+      "use": "@vercel/static-build"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/analyze",
+      "dest": "app.py"
+    },
+    {
+      "src": "/download/(.*)",
+      "dest": "app.py"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "index.html"
+    }
+  ]
+}
