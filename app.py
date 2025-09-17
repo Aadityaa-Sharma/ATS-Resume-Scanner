@@ -25,15 +25,23 @@ from advanced_resume_analyzer import (
 )
 
 app = Flask(__name__)
-CORS(app)
 
-# Configuration
+# --- CORS Configuration ---
+# Get the allowed origin from the environment variable you set on Render.
+# Provide a fallback for local development (e.g., http://localhost:5173)
+allowed_origin = os.environ.get('CORS_ORIGIN', 'http://localhost:5173')
+
+# Initialize CORS to only allow requests from your specific frontend URL.
+CORS(app, resources={r"/*": {"origins": allowed_origin}}, supports_credentials=True)
+
+
+# --- App Configuration ---
 UPLOAD_FOLDER = 'uploads'
 REPORTS_FOLDER = 'reports'
 ALLOWED_EXTENSIONS = {'pdf', 'txt'}
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
 
-# Create directories
+# Create directories if they don't exist
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(REPORTS_FOLDER, exist_ok=True)
 
@@ -57,7 +65,6 @@ def index():
 def analyze_resume():
     """Main endpoint for resume analysis"""
     try:
-        # Check if file is present
         if 'resume' not in request.files:
             return jsonify({'success': False, 'error': 'No file provided'})
         
@@ -68,7 +75,6 @@ def analyze_resume():
         if not allowed_file(file.filename):
             return jsonify({'success': False, 'error': 'Invalid file type. Please upload PDF or TXT files only.'})
         
-        # Save uploaded file
         filename = secure_filename(file.filename)
         file_id = str(uuid.uuid4())
         file_extension = filename.rsplit('.', 1)[1].lower()
@@ -78,23 +84,19 @@ def analyze_resume():
         file.save(filepath)
         logger.info(f"File saved: {filepath}")
         
-        # Extract text
         resume_text = extract_resume_text(filepath)
         if not resume_text:
-            os.remove(filepath)  # Clean up
+            os.remove(filepath)
             return jsonify({'success': False, 'error': 'Could not extract text from the file'})
         
         logger.info("Text extraction successful")
         
-        # Perform comprehensive analysis
         analysis_result = perform_comprehensive_analysis(resume_text, file_id)
         
-        # Generate detailed report
         report_filename = f"{file_id}_analysis_report.txt"
         report_path = os.path.join(app.config['REPORTS_FOLDER'], report_filename)
         generate_comprehensive_report(resume_text, report_path)
         
-        # Clean up uploaded file
         os.remove(filepath)
         
         logger.info("Analysis completed successfully")
@@ -110,31 +112,13 @@ def analyze_resume():
 
 def perform_comprehensive_analysis(resume_text, file_id):
     """Perform comprehensive resume analysis and return structured data"""
-    
-    # Parse sections
     sections = parse_resume_sections(resume_text)
-    
-    # Analyze technical keywords
     tech_keywords = analyze_technical_keywords(resume_text)
-    
-    # Calculate job profile matches
     job_matches = calculate_job_profile_match(resume_text, sections)
-    
-    # Calculate ATS score
     ats_score, score_breakdown = calculate_comprehensive_ats_score(resume_text, sections, job_matches)
-    
-    # Get best job match
     best_match = max(job_matches.items(), key=lambda x: x[1]['score'])
-    
-    # Analyze each section in detail
-    section_analyses = {}
-    for section_name, content in sections.items():
-        section_analyses[section_name] = analyze_section_details(section_name, content)
-    
-    # Generate recommendations
+    section_analyses = {name: analyze_section_details(name, content) for name, content in sections.items()}
     recommendations = generate_recommendations(job_matches, section_analyses, ats_score)
-    
-    # Calculate improvement potential
     improvement_potential = min(ats_score + 15, 95)
     
     return {
@@ -142,7 +126,7 @@ def perform_comprehensive_analysis(resume_text, file_id):
         'ats_score': round(ats_score, 1),
         'best_job_match': best_match[0],
         'match_percentage': round(best_match[1]['score'], 1),
-        'tech_keywords_found': sum(len(keywords) for keywords in tech_keywords.values()),
+        'tech_keywords_found': sum(len(kw) for kw in tech_keywords.values()),
         'improvement_potential': round(improvement_potential, 1),
         'total_words': len(resume_text.split()),
         'job_matches': job_matches,
@@ -154,61 +138,40 @@ def perform_comprehensive_analysis(resume_text, file_id):
 
 def generate_recommendations(job_matches, section_analyses, ats_score):
     """Generate prioritized recommendations"""
-    recommendations = {
-        'critical': [],
-        'high': [],
-        'medium': []
-    }
+    recs = {'critical': [], 'high': [], 'medium': []}
+    best_match_data = max(job_matches.values(), key=lambda x: x['score'])
     
-    # Get best job match for recommendations
-    best_match = max(job_matches.items(), key=lambda x: x[1]['score'])
-    best_match_data = best_match[1]
-    
-    # Critical recommendations
     if best_match_data['missing_required']:
-        recommendations['critical'].append(
-            f"🚨 Add missing critical keywords: {', '.join(best_match_data['missing_required'][:3])}"
-        )
+        recs['critical'].append(f"🚨 Add missing critical keywords: {', '.join(best_match_data['missing_required'][:3])}")
     
-    # Check for critical section issues
-    for section_name, analysis in section_analyses.items():
-        if analysis['improvement_priority'] == 'CRITICAL':
-            if analysis['issues']:
-                recommendations['critical'].append(
-                    f"🚨 Fix {section_name} section: {analysis['issues'][0].replace('❌ CRITICAL: ', '').replace('🚨 CRITICAL: ', '')}"
-                )
-    
-    # High priority recommendations
+    for name, analysis in section_analyses.items():
+        if analysis['improvement_priority'] == 'CRITICAL' and analysis['issues']:
+            recs['critical'].append(f"🚨 Fix {name} section: {analysis['issues'][0].split(': ', 1)[1]}")
+
     if ats_score < 70:
-        recommendations['high'].append("⚡ Increase technical keyword density throughout resume")
-    
-    recommendations['high'].extend([
+        recs['high'].append("⚡ Increase technical keyword density throughout resume")
+    recs['high'].extend([
         "📈 Add more quantifiable metrics and achievements",
         "💪 Increase action verb usage in experience descriptions",
         "🎯 Expand technical skills section with relevant technologies"
     ])
-    
     if best_match_data['missing_preferred']:
-        recommendations['high'].append(
-            f"⭐ Consider adding preferred keywords: {', '.join(best_match_data['missing_preferred'][:3])}"
-        )
-    
-    # Medium priority recommendations
-    recommendations['medium'].extend([
+        recs['high'].append(f"⭐ Consider adding preferred keywords: {', '.join(best_match_data['missing_preferred'][:3])}")
+
+    recs['medium'].extend([
         "✨ Optimize formatting and visual consistency",
         "🔗 Add portfolio/GitHub links if missing",
         "📚 Include relevant certifications or recent courses",
         "🎨 Tailor summary/objective for target roles",
         "📊 Ensure consistent bullet point formatting"
     ])
-    
-    return recommendations
+    return recs
 
 @app.route('/download/<report_id>')
 def download_report(report_id):
     """Download the detailed analysis report"""
     try:
-        report_filename = f"{report_id}_analysis_report.txt"
+        report_filename = f"{secure_filename(report_id)}_analysis_report.txt"
         report_path = os.path.join(app.config['REPORTS_FOLDER'], report_filename)
         
         if not os.path.exists(report_path):
@@ -217,10 +180,9 @@ def download_report(report_id):
         return send_file(
             report_path,
             as_attachment=True,
-            download_name=f"resume_analysis_report_{report_id}.txt",
+            download_name=f"resume_analysis_report.txt",
             mimetype='text/plain'
         )
-    
     except Exception as e:
         logger.error(f"Error downloading report: {str(e)}")
         return jsonify({'error': 'Failed to download report'}), 500
@@ -245,4 +207,4 @@ if __name__ == '__main__':
     print("📋 Supported file types: PDF, TXT")
     print("🔧 Maximum file size: 10MB")
     print("-" * 60)
-    
+    app.run(host='0.0.0.0', port=5000, debug=False)
