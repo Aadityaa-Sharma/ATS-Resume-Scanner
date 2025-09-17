@@ -201,10 +201,12 @@ def internal_error(e):
     return jsonify({'success': False, 'error': 'Internal server error'}), 500
 
 if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 5000))  # Use Render's PORT or fallback to 5000 locally
     print("🚀 Starting Resume Analyzer Web Application...")
-    print("📊 Server will be available at: http://localhost:5000")
+    print(f"📊 Server will be available at: http://0.0.0.0:{port}")
     print("💡 Make sure to place advanced_resume_analyzer.py in the same directory")
     print("📋 Supported file types: PDF, TXT")
     print("🔧 Maximum file size: 10MB")
     print("-" * 60)
-    app.run(host='0.0.0.0', port=5000, debug=False)
+    app.run(host='0.0.0.0', port=port, debug=False)
+
