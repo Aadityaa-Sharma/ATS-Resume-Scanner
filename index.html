@@ -215,9 +215,9 @@
             <div class="upload-section">
                 <div class="card upload-area" id="uploadArea">
                     <div class="upload-icon"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg></div>
-                    <div class="upload-text">Drop your PDF resume here</div>
+                    <div class="upload-text">Drop your PDF or TXT resume here</div>
                     <div class="upload-subtext">or click to browse files</div>
-                    <input type="file" id="fileInput" class="file-input" accept=".pdf">
+                    <input type="file" id="fileInput" class="file-input" accept=".pdf,.txt">
                     <button class="browse-btn" id="browseBtn">Browse Files</button>
                 </div>
                 <button class="analyze-btn" id="analyzeResumeBtn" disabled>Analyze Resume</button>
@@ -233,7 +233,7 @@
                     <div class="loading-header"><div class="loading-spinner"></div><span>Analyzing Resume</span></div>
                     <div class="progress-bar-container"><div class="progress-bar-fill" id="progressBar"></div></div>
                     <div class="progress-stages">
-                        <div class="stage-item" id="stage1"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg><span>Parsing PDF</span></div>
+                        <div class="stage-item" id="stage1"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg><span>Parsing File</span></div>
                         <div class="stage-item" id="stage2"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 18a2 2 0 0 0-2-2H9a2 2 0 0 0-2 2"/><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg><span>Analyzing Content</span></div>
                         <div class="stage-item" id="stage3"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18.7 8a6 6 0 0 0-8.3-8.3"/><path d="M13.3 13.3a6 6 0 0 0 8.3 8.3"/></svg><span>Calculating Score</span></div>
                     </div>
@@ -243,7 +243,7 @@
         </div>
         
         <div class="results" id="resultsSection">
-             </div>
+        </div>
     </div>
 
     <script>
@@ -294,8 +294,9 @@
 
         // --- Core Functions ---
         function handleFile(file) {
-            if (!file || !file.type.includes('pdf')) {
-                alert('Please select a valid PDF file.');
+            const allowedTypes = ['application/pdf', 'text/plain'];
+            if (!file || !allowedTypes.includes(file.type)) {
+                alert('Please select a valid PDF or TXT file.');
                 return;
             }
             selectedFile = file;
@@ -310,8 +311,13 @@
             formData.append('resume', file);
             
             setTimeout(() => {
-                fetch('/analyze', { method: 'POST', body: formData })
-                    .then(response => response.json())
+                fetch('/features/manual-scanner/analyze', { method: 'POST', body: formData })
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! status: ${response.status}`);
+                        }
+                        return response.json();
+                    })
                     .then(data => {
                         clearInterval(progressInterval);
                         progressBar.style.width = '100%';
@@ -328,10 +334,10 @@
                     .catch(error => {
                         clearInterval(progressInterval);
                         console.error('Error:', error);
-                        alert('An error occurred while analyzing the resume.');
+                        alert('An error occurred while analyzing the resume. Please check the console for details.');
                         resetToInitialState();
                     });
-            }, 3000);
+            }, 1000);
         }
         
         function simulateProgress() {
@@ -378,7 +384,7 @@
             fileInput.value = '';
             clearInterval(progressInterval);
             const uploadText = uploadArea.querySelector('.upload-text');
-            uploadText.textContent = 'Drop your PDF resume here';
+            uploadText.textContent = 'Drop your PDF or TXT resume here';
             uploadText.style.fontSize = '1.1rem';
             analyzeResumeBtn.textContent = 'Analyze Resume';
             updateUIState('initial');
@@ -401,7 +407,7 @@
                 <div class="card download-section">
                     <h3>Download Detailed Report</h3>
                     <p style="color: var(--text-secondary); margin: 10px 0 20px;">Get a comprehensive text file with all analysis details.</p>
-                    <a href="/download/${analysis.report_id}" class="download-btn">Download Full Report</a>
+                    <a href="/features/manual-scanner/download/${analysis.report_id}" class="download-btn">Download Full Report</a>
                 </div>
             `;
             
@@ -432,3 +438,4 @@
     </script>
 </body>
 </html>
+i have also updated my file input to accept text files but its not working, help me with that too in a single response
